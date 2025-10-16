@@ -1,30 +1,148 @@
+// Import necessary modules
 const express = require('express');
 const jwt = require('jsonwebtoken');
+
+// Import database of books
 let books = require("./booksdb.js");
+
+// Create a router instance for registered user routes
 const regd_users = express.Router();
 
+// Initialize an empty array to store registered users
 let users = [];
 
-const isValid = (username)=>{ //returns boolean
-//write code to check is the username is valid
-}
+// Function to check if a username is valid
+const isValid = (username) => {
+  // Check if the username is not empty and is alphanumeric
+  if (!username || !/^[a-zA-Z0-9]+$/.test(username)) {
+    return false;
+  }
 
-const authenticatedUser = (username,password)=>{ //returns boolean
-//write code to check if username and password match the one we have in records.
-}
+  // Additional validation criteria can be added here if needed
+  // For example:
 
-//only registered users can login
-regd_users.post("/login", (req,res) => {
-  //Write your code here
-  return res.status(300).json({message: "Yet to be implemented"});
+  // Check if the username length is within a specific range
+  if (username.length < 3 || username.length > 20) {
+    return false;
+  }
+
+  // Check if the username meets certain character restrictions
+  // For example, if you want to allow only letters and digits
+  if (!/^[a-zA-Z0-9]+$/.test(username)) {
+    return false;
+  }
+
+  // Check against a list of reserved usernames, etc.
+  // For example, if you want to disallow certain usernames
+  const reservedUsernames = ['admin', 'root', 'superuser'];
+  if (reservedUsernames.includes(username.toLowerCase())) {
+    return false;
+  }
+
+  // If all validation criteria pass, return true
+  return true;
+};
+
+// Function to check if a username and password match the records
+const authenticatedUser = (username, password) => {
+  // Check if username and password are provided
+  if (!username || !password) {
+    return false;
+  }
+
+  // Find the user in the records based on the username
+  const user = users.find(user => user.username === username);
+
+  // If user not found, return false
+  if (!user) {
+    return false;
+  }
+
+  // Check if the provided password matches the stored password for the user
+  // You should implement proper password hashing and comparison here
+  // For demonstration purposes, we are comparing passwords directly (not recommended in production)
+  if (user.password === password) {
+    return true;
+  }
+
+  // If password doesn't match, return false
+  return false;
+};
+
+
+// Route to handle user login
+regd_users.post("/login", (req, res) => {
+  const username = req.body.username;
+  const password = req.body.password;
+  // Check if username or password is missing
+  if (!username || !password) {
+    return res.status(404).json({ message: "Error logging in" });
+  }
+  // Authenticate user
+  if (authenticatedUser(username, password)) {
+    // Generate JWT access token
+    let accessToken = jwt.sign({
+      data: password
+    }, 'access', { expiresIn: 60 * 60 });
+    // Store access token and username in session
+    req.session.authorization = {
+      accessToken, username
+    }
+    return res.status(200).send("User successfully logged in");
+  } else {
+    return res.status(208).json({ message: "Invalid Login. Check username and password" });
+  }
 });
 
-// Add a book review
+
+// Route to add a book review for an authenticated user
 regd_users.put("/auth/review/:isbn", (req, res) => {
-  //Write your code here
-  return res.status(300).json({message: "Yet to be implemented"});
+  const { isbn } = req.params;
+  const { review } = req.body;
+  const username = req.session.authorization.username;
+
+
+  // Check if review is provided
+  if (!review) {
+    return res.status(400).json({ message: "Review is required" });
+  }
+
+  // Check if the book exists
+  if (!books[isbn]) {
+    return res.status(404).json({ message: "Book not found" });
+  }
+
+  // Add the review to the book
+  books[isbn].reviews[username] = review;
+
+  // Return success message
+  return res.status(200).json({ message: "Review added successfully" });
 });
 
+
+// Route to delete a book review for an authenticated user
+regd_users.delete("/auth/review/:isbn", (req, res) => {
+  const { isbn } = req.params;
+  const username = req.session.authorization.username;
+
+  // Check if the book exists
+  if (!books[isbn]) {
+    return res.status(404).json({ message: "Book not found" });
+  }
+
+  // Add the review to the book
+  delete books[isbn].reviews[username];
+
+  // Return success message
+  return res.status(200).json({ message: "Review deleted successfully" });
+});
+
+
+// Export the router containing registered user routes
 module.exports.authenticated = regd_users;
+
+// Export the isValid function to validate usernames
 module.exports.isValid = isValid;
+
+// Export the users array to store registered users
 module.exports.users = users;
